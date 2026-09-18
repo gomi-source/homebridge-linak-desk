@@ -1,0 +1,32 @@
+# Compiled output
+dist
+
+# Dependencies
+node_modules/
+
+# Local homebridge test instance
+/test/hbConfig/*
+!/test/hbConfig/config.json
+
+# Logs
+logs
+*.log
+npm-debug.log*
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Caches
+.npm
+.eslintcache
+*.tsbuildinfo
+
+# Output of 'npm pack'
+*.tgz
+
+# Environment
+.env
+.env.test
+
+# Editors / OS
+.DS_Store
+.idea
+.vscode-test

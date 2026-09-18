@@ -1,0 +1,303 @@
+{
+  "pluginAlias": "LinakDesk",
+  "pluginType": "platform",
+  "singular": true,
+  "strictValidation": false,
+  "headerDisplay": "Controls LINAK sit/stand desks through the [mqtt-linak](https://github.com/gomi-source/mqtt-linak) bridge. Each desk appears in Apple Home as a window covering, where 0% is the lowest position and 100% the highest, plus one switch per favourite position.",
+  "footerDisplay": "Desk ids must match the `id` of a desk in the mqtt-linak config. **Every height here is measured from the floor**, in millimetres. The desk itself reports and accepts heights above its own base, so the plugin converts them using the `base_height` the bridge publishes — which also means a desk shows as not responding until that value has arrived.",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "title": "Name",
+        "type": "string",
+        "default": "LINAK Desk",
+        "required": true,
+        "description": "Name for this platform in the Homebridge log."
+      },
+      "mqtt": {
+        "type": "object",
+        "title": "MQTT Broker",
+        "required": true,
+        "properties": {
+          "url": {
+            "title": "Broker URL",
+            "type": "string",
+            "default": "mqtt://localhost:1883",
+            "required": true,
+            "placeholder": "mqtt://localhost:1883",
+            "description": "Broker the mqtt-linak bridge publishes to. mqtt, mqtts, ws and wss are all accepted."
+          },
+          "username": {
+            "title": "Broker username",
+            "type": "string",
+            "required": false
+          },
+          "password": {
+            "title": "Broker password",
+            "type": "string",
+            "required": false,
+            "x-schema-form": {
+              "type": "password"
+            }
+          },
+          "clientId": {
+            "title": "Client ID",
+            "type": "string",
+            "required": false,
+            "description": "Leave empty for a randomly generated one."
+          },
+          "commandTopicBase": {
+            "title": "Command Topic Base",
+            "type": "string",
+            "default": "cmd/linak",
+            "required": true,
+            "description": "Matches command_topic_base in the mqtt-linak config. Moves are published to {base}/{deskId}/height."
+          },
+          "metricTopicBase": {
+            "title": "Metric Topic Base",
+            "type": "string",
+            "default": "tele/linak",
+            "required": true,
+            "description": "Matches metric_topic_base in the mqtt-linak config. Height, base height and availability are read from {base}/{deskId}/..."
+          },
+          "useAvailability": {
+            "title": "Follow availability topics",
+            "type": "boolean",
+            "default": true,
+            "required": false,
+            "description": "Show a desk as 'No Response' in the Home app while the bridge or the desk reports itself offline."
+          }
+        }
+      },
+      "desks": {
+        "type": "array",
+        "title": "Desks",
+        "required": true,
+        "items": {
+          "type": "object",
+          "title": "Desk",
+          "properties": {
+            "id": {
+              "title": "Desk ID",
+              "type": "string",
+              "required": true,
+              "placeholder": "office",
+              "description": "The desk's id in the mqtt-linak config. 'bridge' is reserved."
+            },
+            "name": {
+              "title": "Name",
+              "type": "string",
+              "required": false,
+              "placeholder": "Office Desk",
+              "description": "Shown in the Home app. Defaults to the desk id."
+            },
+            "minHeightMm": {
+              "title": "Lowest position (mm above the floor)",
+              "type": "integer",
+              "default": 620,
+              "minimum": 1,
+              "maximum": 6553,
+              "required": false,
+              "x-schema-form": {
+                "type": "number"
+              },
+              "description": "The desk at its lowest, measured from the floor. Mapped to 0% in HomeKit."
+            },
+            "maxHeightMm": {
+              "title": "Highest position (mm above the floor)",
+              "type": "integer",
+              "default": 1200,
+              "minimum": 1,
+              "maximum": 6553,
+              "required": false,
+              "x-schema-form": {
+                "type": "number"
+              },
+              "description": "The desk at its highest, measured from the floor. Mapped to 100% in HomeKit, and must be above the lowest position."
+            },
+            "toleranceMm": {
+              "title": "Arrival tolerance (mm)",
+              "type": "integer",
+              "default": 5,
+              "minimum": 1,
+              "maximum": 100,
+              "required": false,
+              "x-schema-form": {
+                "type": "number"
+              },
+              "description": "How close to a favourite's height counts as having arrived."
+            },
+            "moveTimeoutSeconds": {
+              "title": "Move timeout (seconds)",
+              "type": "integer",
+              "default": 30,
+              "minimum": 1,
+              "maximum": 300,
+              "required": false,
+              "x-schema-form": {
+                "type": "number"
+              },
+              "description": "A favourite that has not arrived within this time switches itself back off."
+            },
+            "favourites": {
+              "type": "array",
+              "title": "Favourite Positions",
+              "required": false,
+              "items": {
+                "type": "object",
+                "title": "Favourite",
+                "properties": {
+                  "name": {
+                    "title": "Name",
+                    "type": "string",
+                    "required": true,
+                    "placeholder": "Standing",
+                    "description": "Used as the switch name in the Home app."
+                  },
+                  "heightMm": {
+                    "title": "Height above the floor (mm)",
+                    "type": "integer",
+                    "required": true,
+                    "minimum": 1,
+                    "maximum": 6553,
+                    "placeholder": "1150",
+                    "x-schema-form": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "groupFavourites": {
+        "type": "array",
+        "title": "Group Favourites",
+        "required": false,
+        "description": "A switch that moves several desks to the same height at once.",
+        "items": {
+          "type": "object",
+          "title": "Group Favourite",
+          "properties": {
+            "name": {
+              "title": "Name",
+              "type": "string",
+              "required": true,
+              "placeholder": "Everyone Stand Up",
+              "description": "Used as the switch name in the Home app."
+            },
+            "heightMm": {
+              "title": "Height above the floor (mm)",
+              "type": "integer",
+              "required": true,
+              "minimum": 1,
+              "maximum": 6553,
+              "placeholder": "1150",
+              "x-schema-form": {
+                "type": "number"
+              }
+            },
+            "deskIds": {
+              "type": "array",
+              "title": "Desk IDs",
+              "required": true,
+              "description": "Desk ids from the list above.",
+              "items": {
+                "type": "string",
+                "title": "Desk ID",
+                "placeholder": "office"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "layout": [
+    "name",
+    {
+      "type": "fieldset",
+      "title": "MQTT Broker",
+      "expandable": true,
+      "expanded": true,
+      "items": [
+        "mqtt.url",
+        "mqtt.username",
+        "mqtt.password",
+        "mqtt.commandTopicBase",
+        "mqtt.metricTopicBase",
+        "mqtt.useAvailability",
+        "mqtt.clientId"
+      ]
+    },
+    {
+      "key": "desks",
+      "type": "array",
+      "title": "Desks",
+      "expandable": true,
+      "expanded": true,
+      "buttonText": "Add Desk",
+      "items": [
+        {
+          "type": "section",
+          "items": [
+            "desks[].id",
+            "desks[].name",
+            {
+              "type": "flex",
+              "flex-flow": "row wrap",
+              "items": ["desks[].minHeightMm", "desks[].maxHeightMm"]
+            },
+            {
+              "type": "flex",
+              "flex-flow": "row wrap",
+              "items": ["desks[].toleranceMm", "desks[].moveTimeoutSeconds"]
+            },
+            {
+              "key": "desks[].favourites",
+              "type": "array",
+              "title": "Favourite Positions",
+              "buttonText": "Add Favourite",
+              "items": [
+                {
+                  "type": "flex",
+                  "flex-flow": "row wrap",
+                  "items": ["desks[].favourites[].name", "desks[].favourites[].heightMm"]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "groupFavourites",
+      "type": "array",
+      "title": "Group Favourites",
+      "expandable": true,
+      "expanded": false,
+      "buttonText": "Add Group Favourite",
+      "items": [
+        {
+          "type": "section",
+          "items": [
+            {
+              "type": "flex",
+              "flex-flow": "row wrap",
+              "items": ["groupFavourites[].name", "groupFavourites[].heightMm"]
+            },
+            {
+              "key": "groupFavourites[].deskIds",
+              "type": "array",
+              "title": "Desk IDs",
+              "buttonText": "Add Desk ID",
+              "items": ["groupFavourites[].deskIds[]"]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

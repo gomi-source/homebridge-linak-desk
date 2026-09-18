@@ -1,0 +1,55 @@
+{
+  "bridge": {
+    "name": "LinakDeskDev",
+    "username": "AA:BB:CC:DD:EE:FF",
+    "port": 51826,
+    "pin": "031-45-154"
+  },
+  "plugins": [
+    "homebridge-linak-desk"
+  ],
+  "platforms": [
+    {
+      "platform": "LinakDesk",
+      "name": "LINAK Desk",
+      "mqtt": {
+        "url": "mqtt://localhost:1883",
+        "commandTopicBase": "cmd/linak",
+        "metricTopicBase": "tele/linak"
+      },
+      "desks": [
+        {
+          "id": "anders",
+          "name": "Anders Desk",
+          "minHeightMm": 620,
+          "maxHeightMm": 1200,
+          "favourites": [
+            {
+              "name": "Sitting",
+              "heightMm": 720
+            },
+            {
+              "name": "Standing",
+              "heightMm": 1150
+            }
+          ]
+        },
+        {
+          "id": "guest",
+          "name": "Guest Desk"
+        }
+      ],
+      "groupFavourites": [
+        {
+          "name": "All Desks Standing",
+          "deskIds": [
+            "anders",
+            "guest"
+          ],
+          "heightMm": 1150
+        }
+      ]
+    }
+  ],
+  "accessories": []
+}

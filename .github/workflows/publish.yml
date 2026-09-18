@@ -1,0 +1,130 @@
+name: Publish to npm
+
+# Publishing is triggered by pushing a semver tag. The tag must point at a
+# commit on main, and must match the version in package.json.
+#
+# Authentication is npm Trusted Publishing over OIDC: there is no npm token in
+# this repository. Configure the trusted publisher on npmjs.com for this
+# package with:
+#   repository:  gomi-source/homebridge-linak-desk
+#   workflow:    publish.yml
+#   environment: prd
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+      - '[0-9]+.[0-9]+.[0-9]+'
+      - '[0-9]+.[0-9]+.[0-9]+-*'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      dist-tag: ${{ steps.check.outputs.dist-tag }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Check the tag is on main and matches package.json
+        id: check
+        run: |
+          set -euo pipefail
+
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          manifest="$(node -p "require('./package.json').version")"
+
+          if [ "$version" != "$manifest" ]; then
+            echo "::error::Tag $tag is version $version but package.json says $manifest."
+            exit 1
+          fi
+
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag $tag does not point at a commit on main."
+            exit 1
+          fi
+
+          # A prerelease such as 0.2.0-beta.1 publishes under its own dist-tag
+          # so it never becomes the default install.
+          case "$version" in
+            *-*)
+              identifier="${version#*-}"
+              identifier="${identifier%%.*}"
+              echo "dist-tag=${identifier:-next}" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "dist-tag=latest" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build and lint
+    needs: verify
+    uses: ./.github/workflows/build.yml
+
+  publish:
+    name: Publish
+    needs: [verify, build]
+    runs-on: ubuntu-latest
+    environment: prd
+    permissions:
+      # Required for npm Trusted Publishing over OIDC.
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.x
+          registry-url: https://registry.npmjs.org
+
+      - name: Ensure an npm that supports trusted publishing
+        run: |
+          set -euo pipefail
+          npm install -g npm@latest
+          npm --version
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Publish to npm
+        run: npm publish --tag "${{ needs.verify.outputs.dist-tag }}"
+
+  release:
+    name: GitHub release
+    needs: [verify, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          prerelease=""
+          case "${{ needs.verify.outputs.version }}" in
+            *-*) prerelease="--prerelease" ;;
+          esac
+          gh release create "$GITHUB_REF_NAME" \
+            --title "v${{ needs.verify.outputs.version }}" \
+            --generate-notes \
+            --verify-tag \
+            $prerelease

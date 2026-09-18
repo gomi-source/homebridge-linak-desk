@@ -1,0 +1,33 @@
+# Source code
+src
+test
+
+# GitHub
+.github
+
+# Tooling
+eslint.config.js
+tsconfig.json
+nodemon.json
+.vscode
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Caches
+.npm
+.eslintcache
+*.tsbuildinfo
+
+# Output of 'npm pack'
+*.tgz
+
+# Environment
+.env
+.env.test
+
+# Editors / OS
+.DS_Store
+.idea
