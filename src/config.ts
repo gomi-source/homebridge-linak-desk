@@ -274,7 +274,11 @@ export function parseConfig(config: PlatformConfig, log: Logging): LinakDeskSett
   const mqttRaw = asRecord(config.mqtt) ?? {};
 
   const url = asTrimmedString(mqttRaw.url) ?? DEFAULTS.url;
-  if (!/^(mqtt|mqtts|ws|wss|tcp|ssl):\/\//i.test(url)) {
+  // mqtt/tcp and mqtts/ssl/tls are aliases for the same transports, both here
+  // and in the Go client mqtt-linak uses, so a config copied from either side
+  // works. Checked up front because MQTT.js answers an unrecognised scheme by
+  // quietly falling back to another transport rather than failing.
+  if (!/^(mqtt|mqtts|tcp|ssl|tls|ws|wss):\/\//i.test(url)) {
     log.error(`mqtt.url ${JSON.stringify(url)} is not a broker URL (expected for example mqtt://host:1883). Platform not started.`);
     return undefined;
   }

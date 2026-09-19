@@ -29,10 +29,23 @@ export interface Favourite {
  * of the same desks, including group favourites. After the move is issued the
  * desks are watched until they either arrive or stop somewhere else, and a
  * favourite that did not get there switches itself back off.
+ *
+ * Once no move is in flight the switches are simply derived from where the
+ * desks are resting: a favourite is on exactly when every one of its desks sits
+ * within tolerance of its height, however it got there. So driving a desk from
+ * its own panel, or with the slider, lights up the matching favourite, and a
+ * restart restores the switches instead of showing them all off.
  */
 export class FavouriteCoordinator {
   private readonly favourites = new Map<string, Favourite>();
   private readonly active = new Set<string>();
+  /**
+   * Favourites the user switched off by hand while their desks were still
+   * sitting at the height. Without this the derivation below would switch them
+   * straight back on, and the tap would look like it did nothing. Cleared as
+   * soon as the desks leave, so it never outlives the position it refers to.
+   */
+  private readonly suppressed = new Set<string>();
   /** Desks with a move in flight, so drift checks do not fire mid-move. */
   private readonly moving = new Map<string, number>();
   private generation = 0;
@@ -52,10 +65,20 @@ export class FavouriteCoordinator {
    * another favourite, clears the switch.
    */
   watch(desk: DeskController): void {
-    desk.on('settled', () => this.reviewAfterSettle(desk));
+    desk.on('settled', () => this.review(desk));
     desk.on('state', () => {
       if (!desk.reachable) {
         this.clearFavouritesFor(desk.id, 'the desk went offline');
+        return;
+      }
+      // Also review on a plain state change, but only while the desk is at
+      // rest. This is what catches a desk that was already sitting on a
+      // favourite before Homebridge started, and one whose base height only
+      // arrived after its height, both of which produce no `settled` of their
+      // own. Mid-move the trend is up or down, so passing through a favourite
+      // height on the way somewhere else does not light it up.
+      if (desk.trend === 'stopped') {
+        this.review(desk);
       }
     });
   }
@@ -70,6 +93,10 @@ export class FavouriteCoordinator {
    */
   deactivate(key: string): void {
     this.active.delete(key);
+    const favourite = this.favourites.get(key);
+    if (favourite !== undefined && this.isSatisfied(favourite)) {
+      this.suppressed.add(key);
+    }
   }
 
   /**
@@ -84,6 +111,7 @@ export class FavouriteCoordinator {
     }
 
     this.clearConflicting(favourite);
+    this.suppressed.delete(key);
     this.active.add(key);
 
     const generation = ++this.generation;
@@ -178,21 +206,50 @@ export class FavouriteCoordinator {
     }
   }
 
-  private reviewAfterSettle(desk: DeskController): void {
+  /**
+   * Brings every favourite that involves this desk back in line with reality.
+   * Skipped for any favourite with a move still in flight, whose own
+   * verification has the last word.
+   */
+  private review(desk: DeskController): void {
     if (this.moving.has(desk.id)) {
       return;
     }
-    for (const key of [...this.active]) {
-      const favourite = this.favourites.get(key);
-      if (favourite === undefined || !favourite.deskIds.includes(desk.id)) {
+
+    for (const favourite of this.favourites.values()) {
+      if (!favourite.deskIds.includes(desk.id) || favourite.deskIds.some(id => this.moving.has(id))) {
         continue;
       }
-      if (!desk.isAtFloorHeightMm(favourite.heightMm, favourite.toleranceMm)) {
-        this.active.delete(key);
+
+      const satisfied = this.isSatisfied(favourite);
+      if (!satisfied) {
+        this.suppressed.delete(favourite.key);
+      }
+      if (satisfied && this.suppressed.has(favourite.key)) {
+        continue;
+      }
+      if (satisfied === this.active.has(favourite.key)) {
+        continue;
+      }
+
+      if (satisfied) {
+        this.active.add(favourite.key);
+        favourite.setSwitch(true);
+        this.log.debug(`Switching on ${favourite.label}, its desks are resting at ${favourite.heightMm} mm.`);
+      } else {
+        this.active.delete(favourite.key);
         favourite.setSwitch(false);
         this.log.debug(`Switching off ${favourite.label}, ${desk.name} is now at ${describeHeight(desk)}.`);
       }
     }
+  }
+
+  /** True when every desk the favourite covers is reachable and at its height. */
+  private isSatisfied(favourite: Favourite): boolean {
+    return favourite.deskIds.every(deskId => {
+      const desk = this.desks.get(deskId);
+      return desk !== undefined && desk.reachable && desk.isAtFloorHeightMm(favourite.heightMm, favourite.toleranceMm);
+    });
   }
 
   private clearFavouritesFor(deskId: string, reason: string): void {

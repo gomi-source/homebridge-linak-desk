@@ -178,6 +178,94 @@ describe('FavouriteCoordinator', () => {
     assert.equal(standing.on, false);
   });
 
+  it('switches on when the desk is driven onto a favourite by other means', async () => {
+    const { bus, coordinator } = setup();
+    const standing = favourite(coordinator, 'office:standing', 1150, ['office']);
+    assert.equal(coordinator.isActive('office:standing'), false);
+
+    // Somebody used the panel on the desk, or the Home slider.
+    bus.deliver('linak/desk/office/height', '5300');
+    await settle();
+
+    assert.equal(coordinator.isActive('office:standing'), true);
+    assert.equal(standing.on, true, 'the switch is pushed on');
+  });
+
+  it('does not light up a favourite the desk only travels through', async () => {
+    const { bus, coordinator } = setup();
+    favourite(coordinator, 'office:standing', 1150, ['office']);
+
+    // Passing 1150 mm on the way somewhere else: still moving, so no verdict.
+    bus.deliver('linak/desk/office/height', '5300');
+    assert.equal(coordinator.isActive('office:standing'), false);
+    bus.deliver('linak/desk/office/height', '6000');
+    await settle();
+
+    assert.equal(coordinator.isActive('office:standing'), false, 'it came to rest somewhere else');
+  });
+
+  it('picks up a desk that was already at a favourite before it started', async () => {
+    const bus = new FakeBus();
+    const log = fakeLog();
+    const desks = new Map();
+    const coordinator = new FavouriteCoordinator(desks, log);
+
+    const desk = new DeskController(deskConfig({ settleMs: SETTLE_MS }), bus, MQTT_SETTINGS, log);
+    desk.start();
+    desks.set('office', desk);
+    coordinator.watch(desk);
+    const standing = favourite(coordinator, 'office:standing', 1150, ['office']);
+
+    // Retained state arriving at startup, with no movement of any kind.
+    bus.deliver('linak/desk/office/base_height', '6200');
+    bus.deliver('linak/desk/office/availability', 'online');
+    bus.deliver('linak/desk/bridge/availability', 'online');
+    bus.deliver('linak/desk/office/height', '5300');
+
+    assert.equal(coordinator.isActive('office:standing'), true, 'no settle event is needed');
+    assert.equal(standing.on, true);
+    desk.dispose();
+  });
+
+  it('switches a group favourite on when its desks arrive separately', async () => {
+    const { bus, coordinator } = setup(['office', 'studio']);
+    const everyone = favourite(coordinator, 'group:everyone', 1150, ['office', 'studio']);
+
+    bus.deliver('linak/desk/office/height', '5300');
+    await settle();
+    assert.equal(coordinator.isActive('group:everyone'), false, 'one desk is not the group');
+
+    bus.deliver('linak/desk/studio/height', '5300');
+    await settle();
+    assert.equal(coordinator.isActive('group:everyone'), true);
+    assert.equal(everyone.on, true);
+  });
+
+  it('keeps a hand-switched-off favourite off until the desk leaves', async () => {
+    const { bus, coordinator } = setup();
+    const sitting = favourite(coordinator, 'office:sitting', 720, ['office']);
+
+    // The desk starts out at 720 mm, so the switch derives itself on.
+    bus.deliver('linak/desk/office/height', '1000');
+    await settle();
+    assert.equal(coordinator.isActive('office:sitting'), true);
+
+    coordinator.deactivate('office:sitting');
+    sitting.on = false;
+    bus.deliver('linak/desk/office/availability', 'online');
+    await settle();
+    assert.equal(coordinator.isActive('office:sitting'), false, 'the tap is not undone under the user');
+    assert.equal(sitting.on, false);
+
+    // Leaving and coming back makes it meaningful again.
+    bus.deliver('linak/desk/office/height', '5300');
+    await settle();
+    bus.deliver('linak/desk/office/height', '1000');
+    await settle();
+    assert.equal(coordinator.isActive('office:sitting'), true);
+    assert.equal(sitting.on, true);
+  });
+
   it('switching off by hand does not move the desk', () => {
     const { bus, coordinator } = setup();
     favourite(coordinator, 'office:standing', 1150, ['office']);

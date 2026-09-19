@@ -199,6 +199,20 @@ describe('DeskAccessory', () => {
     assert.equal(sitting.value, false);
   });
 
+  it('lights up the favourite switch when the desk is driven there by hand', async () => {
+    const { accessory, bus } = setup();
+    online(bus, 1000);
+    const standing = accessory.getServiceById(Service.Switch, 'favourite-standing').getCharacteristic(Characteristic.On);
+    assert.equal(standing.value, false);
+
+    // No HomeKit write at all: the desk simply arrives at 1150 mm.
+    bus.deliver('linak/desk/office/height', '5300');
+    await new Promise(resolve => setTimeout(resolve, 60));
+
+    assert.equal(standing.value, true, 'Home sees the switch turn itself on');
+    assert.equal(await standing.handleGetRequest(), true);
+  });
+
   it('drops switches for favourites removed from the config', () => {
     const { accessory, bus, coordinator, desk, platform } = setup();
     assert.equal(accessory.services.filter(service => service.UUID === Service.Switch.UUID).length, 2);

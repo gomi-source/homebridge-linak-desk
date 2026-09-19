@@ -44,19 +44,25 @@ desk tile in Home expands into the height slider plus "Sitting", "Standing", and
 whatever else you named. **Group favourites** are separate switch accessories
 that move several desks at once.
 
-Favourite switches behave like radio buttons, because that is the only honest
-way to show a position in a protocol that has no such concept:
+A favourite switch is on exactly when the desk is resting at that height. It is
+a description of where the desk is, not a memory of what you last pressed:
 
 - Switching one on switches off every other favourite that touches the same
-  desk, group favourites included.
+  desk, group favourites included — Apple Home has no radio group, so this is
+  done here.
 - The desk is then watched until it arrives. A favourite that does not get
   there — the desk was blocked, the bridge went away, someone pressed a button
   on the panel — **switches itself back off**, so the Home app never claims a
   position the desk is not in.
-- Moving a desk away from a favourite's height by any other means switches that
-  favourite off too.
-- Switching a favourite off by hand just clears the switch. The desk stays where
-  it is; there is nothing sensible for "off" to mean physically.
+- Driving a desk onto a favourite's height by any other means — the slider, the
+  panel on the desk, another automation — **switches that favourite on**, and
+  moving it away switches it off. A group favourite comes on once all of its
+  desks are there. After a Homebridge restart the switches come up matching
+  wherever the desks already are, rather than all off.
+- Switching a favourite off by hand does not move the desk; there is nothing
+  sensible for "off" to mean physically. The switch then stays off while the
+  desk sits there, rather than springing back on, and becomes live again once
+  the desk leaves that height.
 
 ## Requirements
 
@@ -174,7 +180,7 @@ taken from the most forgiving of its member desks.
 
 | Field | Default | Meaning |
 |---|---|---|
-| `url` | `mqtt://localhost:1883` | `mqtt`, `mqtts`, `ws` and `wss` are all accepted. |
+| `url` | `mqtt://localhost:1883` | `mqtt://` and `tcp://` are aliases, as are `mqtts://`, `ssl://` and `tls://`. `ws://`/`wss://` select the WebSocket transport instead. |
 | `username`, `password` | — | Optional broker credentials. |
 | `clientId` | random | Optional fixed client id. |
 | `commandTopicBase` | `cmd/linak` | Must match `command_topic_base` in `mqtt-linak`. |

@@ -26,7 +26,7 @@
             "default": "mqtt://localhost:1883",
             "required": true,
             "placeholder": "mqtt://localhost:1883",
-            "description": "Broker the mqtt-linak bridge publishes to. mqtt, mqtts, ws and wss are all accepted."
+            "description": "Broker the mqtt-linak bridge publishes to. mqtt:// and tcp:// mean the same thing, as do mqtts://, ssl:// and tls://; ws:// and wss:// are the WebSocket transports."
           },
           "username": {
             "title": "Broker username",
