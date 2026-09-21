@@ -2,7 +2,7 @@
   "name": "homebridge-linak-desk",
   "displayName": "LINAK Desk",
   "type": "module",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Control the height of LINAK sit/stand desks from Apple Home, via the mqtt-linak bridge.",
   "author": "Anders Ljungh <anders@gomi.se>",
   "license": "Apache-2.0",
@@ -33,7 +33,7 @@
     "LICENSE"
   ],
   "engines": {
-    "node": "^22.10.0 || ^24.0.0",
+    "node": "^22 || ^24 || ^26",
     "homebridge": "^1.8.0 || ^2.0.0"
   },
   "scripts": {

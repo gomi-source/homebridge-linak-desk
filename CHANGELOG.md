@@ -5,6 +5,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-09-21
+
+### Changed
+
+- `engines.node` is now `^22 || ^24 || ^26`, matching what Homebridge itself requires
+  and adding Node 26, which CI tests alongside 22 and 24. The previous `^22.10.0`
+  floor was inherited from the Homebridge plugin template and had no basis - the v22
+  line entered LTS at 22.11.0, not 22.10.0.
+- The GitHub Actions workflows are now identical across the `gomi-source` Homebridge
+  plugins: `build.yml` tests every supported Node release (Current, Active LTS and
+  Maintenance LTS), runs the test suite when one exists, and audits dependencies;
+  `publish.yml` runs verify -> build -> publish -> release.
+
 ## [0.1.1] - 2026-09-19
 
 ### Changed
