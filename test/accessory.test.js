@@ -170,8 +170,11 @@ describe('DeskAccessory', () => {
     const covering = accessory.getService(Service.WindowCovering);
 
     await covering.getCharacteristic(Characteristic.TargetPosition).handleSetRequest(100);
+    await settle();
+    assert.equal(bus.published.length, 1, 'the command has gone out');
     bus.deliver('linak/desk/office/height', '3000');
     assert.equal(covering.getCharacteristic(Characteristic.PositionState).value, Characteristic.PositionState.INCREASING);
+    assert.equal(covering.getCharacteristic(Characteristic.TargetPosition).value, 100, 'held while the move runs');
 
     // The desk stops a little short of the requested position.
     bus.deliver('linak/desk/office/height', '6400');
@@ -230,6 +233,101 @@ describe('DeskAccessory', () => {
 
     assert.equal(standing.value, true, 'Home sees the switch turn itself on');
     assert.equal(await standing.handleGetRequest(), true);
+  });
+
+  it('moves the slider along with a desk driven by a favourite', async () => {
+    const { accessory, bus } = setup();
+    online(bus, 1000);
+    const covering = accessory.getService(Service.WindowCovering);
+    const current = covering.getCharacteristic(Characteristic.CurrentPosition);
+    const target = covering.getCharacteristic(Characteristic.TargetPosition);
+
+    await accessory.getServiceById(Service.Switch, 'favourite-standing')
+      .getCharacteristic(Characteristic.On)
+      .handleSetRequest(true);
+
+    for (const height of ['2000', '3500', '5300']) {
+      bus.deliver('linak/desk/office/height', height);
+      assert.equal(target.value, current.value, `the slider tracks the desk at ${height}`);
+    }
+    assert.equal(target.value, 82, '1150 mm is 82% of 620-1270');
+  });
+
+  it('moves the slider along with a desk driven from its own panel', () => {
+    const { accessory, bus } = setup();
+    online(bus, 1000);
+    const covering = accessory.getService(Service.WindowCovering);
+
+    for (const height of ['2000', '3000']) {
+      bus.deliver('linak/desk/office/height', height);
+      assert.equal(
+        covering.getCharacteristic(Characteristic.TargetPosition).value,
+        covering.getCharacteristic(Characteristic.CurrentPosition).value,
+      );
+    }
+  });
+
+  it('leaves the slider where the user let go while that move runs', async () => {
+    const { accessory, bus } = setup();
+    online(bus, 0);
+    const target = accessory.getService(Service.WindowCovering).getCharacteristic(Characteristic.TargetPosition);
+
+    await target.handleSetRequest(100);
+    await settle();
+    assert.equal(bus.published.length, 1);
+
+    for (const height of ['2000', '4000']) {
+      bus.deliver('linak/desk/office/height', height);
+      assert.equal(target.value, 100, 'no snap back towards the moving desk');
+    }
+  });
+
+  it('ignores a settle left over from an earlier movement', async () => {
+    const { accessory, bus } = setup();
+    online(bus, 0);
+    const target = accessory.getService(Service.WindowCovering).getCharacteristic(Characteristic.TargetPosition);
+
+    // A previous movement is just ending as the user grabs the slider; its
+    // settle lands inside the coalescing window.
+    bus.deliver('linak/desk/office/height', '500');
+    await target.handleSetRequest(100);
+    await settle();
+
+    bus.deliver('linak/desk/office/height', '2000');
+    assert.equal(target.value, 100, 'still where the user let go');
+  });
+
+  it('hands the slider to a favourite pressed after a slider move', async () => {
+    const { accessory, bus } = setup();
+    online(bus, 0);
+    const covering = accessory.getService(Service.WindowCovering);
+    const target = covering.getCharacteristic(Characteristic.TargetPosition);
+
+    await target.handleSetRequest(100);
+    await settle();
+
+    await accessory.getServiceById(Service.Switch, 'favourite-sitting')
+      .getCharacteristic(Characteristic.On)
+      .handleSetRequest(true);
+    bus.deliver('linak/desk/office/height', '800');
+    assert.equal(target.value, covering.getCharacteristic(Characteristic.CurrentPosition).value);
+  });
+
+  it('moves the slider along with a desk driven by a group favourite', async () => {
+    const { accessory, bus, coordinator, platform } = setup();
+    online(bus, 1000);
+    const covering = accessory.getService(Service.WindowCovering);
+
+    const group = { name: 'Everyone Up', deskIds: ['office'], heightMm: 1150, toleranceMm: 10, moveTimeoutMs: 150 };
+    const groupAccessory = new Accessory(group.name, uuid.generate('test:group-follow'));
+    new GroupFavouriteAccessory(platform, groupAccessory, group, coordinator);
+    await groupAccessory.getService(Service.Switch).getCharacteristic(Characteristic.On).handleSetRequest(true);
+
+    bus.deliver('linak/desk/office/height', '3000');
+    assert.equal(
+      covering.getCharacteristic(Characteristic.TargetPosition).value,
+      covering.getCharacteristic(Characteristic.CurrentPosition).value,
+    );
   });
 
   it('drops switches for favourites removed from the config', () => {

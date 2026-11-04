@@ -39,9 +39,14 @@ means anything. The Home app sends them about once a second however slowly your
 finger moves, so the plugin waits until the slider has been still for 1.3 seconds
 and publishes only that final position: a drag of any speed is a single move.
 HomeKit is answered with the position you asked for immediately, so the slider
-never snaps back. The cost is that a one-off change — from Siri, a scene or an
-automation — waits those 1.3 seconds before the desk starts. Move to a **favourite**
-still trigger immediately.
+never snaps back. The cost is that setting the desk's position — from the slider,
+Siri, a scene or an automation — waits those 1.3 seconds before the desk starts.
+Turning on a **favourite** or group favourite still moves the desk immediately.
+
+When the desk is moved by anything other than the slider — a favourite, a group
+favourite, or the panel on the desk itself — the slider travels along with it.
+While a move you started with the slider is running, the slider stays where you
+let go, and goes back to following the desk once it has come to rest.
 
 Each **favourite** you configure becomes a switch on the same accessory, so a
 desk tile in Home expands into the height slider plus "Sitting", "Standing", and

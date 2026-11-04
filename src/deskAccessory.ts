@@ -50,6 +50,22 @@ export class DeskAccessory {
   private coalesceTimer?: NodeJS.Timeout;
   private lastTargetWriteAt = 0;
 
+  /**
+   * Whether TargetPosition tracks the desk as it moves. The Home app draws its
+   * slider from TargetPosition, so this is what makes the slider glide along
+   * with a desk moved by a favourite, a group favourite or the desk's own panel.
+   *
+   * Off from the moment the slider is used until the desk comes to rest: there
+   * the target is the position the user let go on, and tracking the desk would
+   * snap the slider back to wherever the desk happened to be.
+   */
+  private followDesk = true;
+  /** Set only while the slider's own move is being published. */
+  private commandingFromSlider = false;
+  /** Where the desk was when the slider's move went out, and whether it has left since. */
+  private positionAtPublish?: number;
+  private movedSincePublish = false;
+
   constructor(
     private readonly platform: LinakDeskPlatform,
     private readonly accessory: PlatformAccessory,
@@ -84,6 +100,13 @@ export class DeskAccessory {
 
     this.desk.on('state', () => this.push());
     this.desk.on('settled', () => this.onSettled());
+    this.desk.on('commanded', () => {
+      // A move the slider did not ask for - a favourite or a group favourite -
+      // takes the target over, so the slider follows that move instead.
+      if (!this.commandingFromSlider) {
+        this.followDesk = true;
+      }
+    });
     this.push();
   }
 
@@ -185,6 +208,7 @@ export class DeskAccessory {
 
     // Answer HomeKit with the position the user asked for straight away; only
     // the MQTT command waits.
+    this.followDesk = false;
     this.targetPercent = percent;
     this.pendingPercent = percent;
     this.armCoalesceTimer();
@@ -211,9 +235,27 @@ export class DeskAccessory {
       return;
     }
 
-    const result = this.desk.moveToPercent(percent);
+    // The slider's move is the newest command, so it owns the target again even
+    // if a favourite was pressed while the window was running.
+    this.followDesk = false;
+    this.positionAtPublish = this.desk.positionPercent;
+    this.movedSincePublish = false;
+
+    this.commandingFromSlider = true;
+    let result;
+    try {
+      result = this.desk.moveToPercent(percent);
+    } finally {
+      this.commandingFromSlider = false;
+    }
     if (!result.ok) {
       this.platform.log.error(`${this.desk.name}: could not move to ${percent}% - ${result.reason}.`);
+    }
+
+    // A desk already at the target will not move, so no settle will ever come
+    // to hand the slider back. There is nothing to protect from snapping.
+    if (!result.ok || percent === this.positionAtPublish) {
+      this.followDesk = true;
     }
   }
 
@@ -227,6 +269,14 @@ export class DeskAccessory {
     if (position === undefined) {
       return;
     }
+    // A settle that belongs to an earlier movement is not the end of the
+    // slider's move: either its command has not gone out yet, or the desk has
+    // not started on it. Handing the target back then would snap the slider
+    // to the desk's position partway through.
+    if (!this.followDesk && (this.pendingPercent !== undefined || !this.movedSincePublish)) {
+      return;
+    }
+    this.followDesk = true;
     this.targetPercent = position;
     this.covering.updateCharacteristic(this.platform.Characteristic.TargetPosition, position);
   }
@@ -237,9 +287,12 @@ export class DeskAccessory {
     if (position === undefined) {
       return;
     }
+    if (!this.followDesk && this.pendingPercent === undefined && position !== this.positionAtPublish) {
+      this.movedSincePublish = true;
+    }
     this.covering.updateCharacteristic(Characteristic.CurrentPosition, position);
     this.covering.updateCharacteristic(Characteristic.PositionState, this.positionState());
-    if (this.targetPercent === undefined) {
+    if (this.followDesk || this.targetPercent === undefined) {
       this.targetPercent = position;
       this.covering.updateCharacteristic(Characteristic.TargetPosition, position);
     }

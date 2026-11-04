@@ -78,6 +78,7 @@ export function parseTenths(payload: string): number | undefined {
  * Emits:
  * - `state` whenever the height, base height or reachability changed
  * - `settled` when the height has stopped changing
+ * - `commanded` whenever a move has been published, whoever asked for it
  */
 export class DeskController extends EventEmitter {
   private heightTenths?: number;
@@ -306,6 +307,7 @@ export class DeskController extends EventEmitter {
       return { ok: false, reason: 'the MQTT broker is not connected' };
     }
     this.log.debug(`${this.name}: commanded ${tenthsToMm(value)} mm above its own base.`);
+    this.emit('commanded');
     return { ok: true };
   }
 

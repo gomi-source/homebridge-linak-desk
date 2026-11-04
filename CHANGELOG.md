@@ -5,6 +5,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-11-04
+
+### Changed
+
+- The Home app's position slider now travels along with the desk when it is moved
+  by a favourite, a group favourite or the desk's own panel. Previously the slider
+  stayed at the old position until the desk came to rest, because only the
+  current position was updated as it moved. A move started from the slider itself
+  still keeps the slider where it was let go until the desk stops, so it does not
+  snap back towards the moving desk.
+
 ## [0.2.1] - 2026-11-04
 
 ### Fixed
@@ -94,6 +105,9 @@ Initial release.
   unregistered on the next start.
 - Supports Node.js 22 and 24, Homebridge v1.8 and v2.
 
-[Unreleased]: https://github.com/gomi-source/homebridge-linak-desk/compare/0.2.0...HEAD
+[0.2.2]: https://github.com/gomi-source/homebridge-linak-desk/compare/0.2.1...0.2.2
+[0.2.1]: https://github.com/gomi-source/homebridge-linak-desk/compare/0.2.0...0.2.1
+[0.2.1]: https://github.com/gomi-source/homebridge-linak-desk/compare/0.2.0...0.2.1
+[0.2.0]: https://github.com/gomi-source/homebridge-linak-desk/compare/0.1.1...0.2.0
 [0.1.1]: https://github.com/gomi-source/homebridge-linak-desk/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/gomi-source/homebridge-linak-desk/releases/tag/0.1.0
