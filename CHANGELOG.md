@@ -5,6 +5,23 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-11-04
+
+### Fixed
+
+- A slow drag of the height slider no longer makes the desk stop and restart
+  before it reaches the final position. The Home app sends slider positions about
+  once a second however slowly the finger moves — measured gaps of 1001, 1044 and
+  1054 ms — so the 400 ms window merged nothing in a slow drag and every position
+  was published, each one halting a moving desk. The window is now 1.3 seconds,
+  so a drag of any speed becomes a single move. A one-off change from Siri, a
+  scene or an automation now waits 1.3 s instead of 0.4 s before the desk starts.
+
+### Added
+
+- Each TargetPosition write is logged in debug with the gap since the previous
+  one, so the window can be checked against how a given controller paces writes.
+
 ## [0.2.0] - 2026-09-21
 
 ### Changed
@@ -77,5 +94,6 @@ Initial release.
   unregistered on the next start.
 - Supports Node.js 22 and 24, Homebridge v1.8 and v2.
 
+[Unreleased]: https://github.com/gomi-source/homebridge-linak-desk/compare/0.2.0...HEAD
 [0.1.1]: https://github.com/gomi-source/homebridge-linak-desk/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/gomi-source/homebridge-linak-desk/releases/tag/0.1.0

@@ -34,10 +34,14 @@ Matter has anything closer, so each desk is exposed as a **window covering**:
   place the analogy leaks; everything else — Siri ("set the desk to 80%"),
   automations, scenes — behaves the way you would want.
 
-Dragging the slider sends a stream of positions, not one. A desk position is
-absolute, so the plugin waits 400 ms for the drag to end and publishes only the
-position you let go on — one move, not a queue of them. HomeKit still gets the
-position you asked for straight away, so the slider never snaps back.
+Dragging the slider sends a stream of positions, not one, and only the last
+means anything. The Home app sends them about once a second however slowly your
+finger moves, so the plugin waits until the slider has been still for 1.3 seconds
+and publishes only that final position: a drag of any speed is a single move.
+HomeKit is answered with the position you asked for immediately, so the slider
+never snaps back. The cost is that a one-off change — from Siri, a scene or an
+automation — waits those 1.3 seconds before the desk starts. Move to a **favourite**
+still trigger immediately.
 
 Each **favourite** you configure becomes a switch on the same accessory, so a
 desk tile in Home expands into the height slider plus "Sitting", "Standing", and
@@ -225,12 +229,13 @@ where it stopped. Common causes are a favourite height outside the desk's
 travel, a `toleranceMm` tighter than the desk can position, or something
 physically in the way.
 
-**The desk stutters through several short moves.** If it still does this after
-letting go of the slider, the commands are arriving faster than `mqtt-linak` can
-run them: it queues height commands eight deep and runs each move to completion
-before starting the next, so any burst from any MQTT client becomes a sequence
-of moves to stale targets. This plugin no longer produces such a burst; another
-client on the same topics still can.
+**The desk stops and restarts while you drag slowly.** Each pause is a retarget:
+a new position reached the desk mid-move, and the controller can only take it by
+halting first. The plugin's 1.3 second window is chosen to sit above the Home
+app's roughly one-second pacing of slider writes; run Homebridge with `-D` and
+check the `ms since the last` figures if your controller paces them differently. Make sure the bridge is built against `linak-dpg` v0.3.0 or later,
+which collapses a burst of targets into one; older versions run every move to
+completion in turn, which looks like a string of short moves instead.
 
 **The slider moves the desk to the wrong place.** Drive the desk to each end of
 its travel with its own panel and add `base_height` to the `height` you see;

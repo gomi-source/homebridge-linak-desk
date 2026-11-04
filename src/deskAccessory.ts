@@ -11,19 +11,28 @@ const FAVOURITE_SUBTYPE_PREFIX = 'favourite-';
 /**
  * How long the target has to stay still before it is published.
  *
- * The Home app streams TargetPosition writes while the slider is being
- * dragged. A desk position is absolute and idempotent, so every value but the
- * last one is waste — and worse than waste downstream, where mqtt-linak queues
- * commands and runs each move to completion before starting the next, so a
- * drag became a sequence of complete moves to stale targets.
+ * The Home app streams TargetPosition writes while the slider is dragged, and a
+ * desk position is absolute, so only the last one means anything. Writes that
+ * arrive closer together than this are merged into one; nothing goes out until
+ * the slider has been still for this long.
  *
- * Deliberately trailing-edge only. Publishing the first value immediately would
- * send the desk off towards wherever the finger happened to be a moment after
- * touching down, which is the stutter this exists to remove. A one-off set from
- * Siri, a scene or an automation pays this delay once, which is nothing next to
- * the seconds the desk itself takes.
+ * The value comes from measurement, not taste. A slow drag on a real desk
+ * logged gaps of 1001, 1044 and 1054 ms: too regular to be the finger, so the
+ * Home app evidently paces slider writes at about one a second however slowly
+ * the finger moves. The earlier 400 ms window therefore merged nothing in a slow
+ * drag, every write was published, and each one that reached a moving desk cost
+ * a stop - the controller cannot redirect a moving desk, only halt it, and
+ * linak-dpg then waits out its one-second RetargetGap before moving again.
+ * 1300 ms sits clear of that cadence with room for network jitter, so a whole
+ * drag becomes one move. The price is that a one-off set from Siri, a scene or
+ * an automation waits this long before the desk starts, which is small next to
+ * the several seconds the desk itself takes to travel.
+ *
+ * A gap that does exceed this still works: the extra target reaches linak-dpg,
+ * which keeps only the newest and retargets, at the cost of one stop. The debug
+ * log records every gap, should the cadence turn out to differ elsewhere.
  */
-const TARGET_COALESCE_MS = 400;
+export const TARGET_COALESCE_MS = 1300;
 
 /**
  * One desk, as Apple Home sees it.
@@ -39,6 +48,7 @@ export class DeskAccessory {
   private targetPercent?: number;
   private pendingPercent?: number;
   private coalesceTimer?: NodeJS.Timeout;
+  private lastTargetWriteAt = 0;
 
   constructor(
     private readonly platform: LinakDeskPlatform,
@@ -166,11 +176,21 @@ export class DeskAccessory {
       throw this.platform.notResponding();
     }
 
+    // The gap between writes is the only evidence there is of how the Home app
+    // paces a drag, and it decides whether the window above is wide enough.
+    const now = Date.now();
+    const gap = this.lastTargetWriteAt === 0 ? undefined : now - this.lastTargetWriteAt;
+    this.lastTargetWriteAt = now;
+    this.platform.log.debug(`${this.desk.name}: target ${percent}%${gap === undefined ? '' : ` (${gap} ms since the last)`}`);
+
     // Answer HomeKit with the position the user asked for straight away; only
-    // the MQTT command waits for the drag to end.
+    // the MQTT command waits.
     this.targetPercent = percent;
     this.pendingPercent = percent;
+    this.armCoalesceTimer();
+  }
 
+  private armCoalesceTimer(): void {
     if (this.coalesceTimer !== undefined) {
       clearTimeout(this.coalesceTimer);
     }

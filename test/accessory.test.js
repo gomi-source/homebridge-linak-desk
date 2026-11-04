@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 
 import { Accessory, Characteristic, HAPStatus, HapStatusError, Service, uuid } from '@homebridge/hap-nodejs';
 
-import { DeskAccessory } from '../dist/deskAccessory.js';
+import { DeskAccessory, TARGET_COALESCE_MS } from '../dist/deskAccessory.js';
 import { DeskController } from '../dist/deskController.js';
 import { FavouriteCoordinator } from '../dist/favourites.js';
 import { GroupFavouriteAccessory } from '../dist/groupFavouriteAccessory.js';
@@ -45,8 +45,8 @@ function setup(favourites = [{ name: 'Sitting', heightMm: 720 }, { name: 'Standi
   return { accessory, bus, coordinator, desk, handler, platform, log };
 }
 
-/** Long enough for the target-coalescing window (400 ms) to elapse. */
-const settle = () => new Promise(resolve => setTimeout(resolve, 500));
+/** Long enough for the target-coalescing window to elapse. */
+const settle = () => new Promise(resolve => setTimeout(resolve, TARGET_COALESCE_MS + 100));
 
 function online(bus, heightTenths = 1000) {
   bus.deliver('linak/desk/office/base_height', '6200');
@@ -122,6 +122,25 @@ describe('DeskAccessory', () => {
     await settle();
     assert.equal(bus.published.length, 1, 'exactly one move is published');
     assert.deepEqual(bus.lastPublished, { topic: 'linak/cmd/office/height', payload: '6500' });
+  });
+
+  it('merges a slow drag paced the way the Home app paces it', async () => {
+    // Gaps measured on a real slow drag, including the final value sent twice.
+    const { accessory, bus } = setup();
+    const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+    online(bus, 0);
+    const target = accessory.getService(Service.WindowCovering).getCharacteristic(Characteristic.TargetPosition);
+
+    await target.handleSetRequest(74);
+    for (const [gap, percent] of [[1001, 65], [1044, 43], [1054, 43]]) {
+      await wait(gap);
+      await target.handleSetRequest(percent);
+    }
+    assert.equal(bus.published.length, 0, 'nothing goes out while the drag is still arriving');
+
+    await settle();
+    assert.equal(bus.published.length, 1, 'the whole drag is one move');
+    assert.deepEqual(bus.lastPublished, { topic: 'linak/cmd/office/height', payload: '2795' });
   });
 
   it('answers HomeKit with the dragged position immediately', async () => {
